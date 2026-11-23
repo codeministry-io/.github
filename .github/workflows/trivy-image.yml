@@ -49,6 +49,10 @@ jobs:
 
       - name: Scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          # Trivy picks linux/amd64 from an index regardless of the runner, and the own images are arm64-only:
+          # "no child with platform linux/amd64 in index" (first runs, 2026-11-23).
+          TRIVY_PLATFORM: linux/arm64
         with:
           image-ref: ${{ inputs.image }}
           format: json
@@ -115,6 +119,8 @@ jobs:
       - name: SARIF
         if: inputs.sarif
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
         with:
           image-ref: ${{ inputs.image }}
           format: sarif
