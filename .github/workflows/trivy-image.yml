@@ -1,0 +1,131 @@
+# Reusable Trivy scan of one published image (cm-k8s-cluster spec 011, ISC-167).
+#
+# Called by every own image repo after its image build, once a day and on demand. Scans the image as it sits in
+# the registry, Java archives included, for HIGH and CRITICAL with an available fix. New findings, compared with
+# the previous run of the same image, go to Slack #security once; the job summary always lists everything.
+# A scheduled run with findings fails, so a red run in the Actions tab is the standing reminder. Not a required
+# check anywhere: a new CVE in a base image must not block unrelated pull requests.
+#
+# Lives in this public repo because a reusable workflow in a private repo cannot be called from a public one.
+name: Trivy image scan
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Image reference to scan, e.g. ghcr.io/codeministry/checkmeinebu:latest
+        required: true
+        type: string
+      sarif:
+        description: Also upload SARIF to code scanning (public repos only; private ones of a personal account have no code scanning)
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      SECURITY_WEBHOOK:
+        description: Slack incoming webhook for #security
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Trivy ${{ inputs.image }}
+    # The images are arm64-only (CLAUDE.md of cm-k8s-cluster): scan the artefact that runs, on its own platform.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ inputs.image }}
+          format: json
+          output: trivy.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Cache key
+        id: key
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: echo "slug=$(printf '%s' "$IMAGE" | tr -c 'a-zA-Z0-9' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Findings of the previous run
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-seen
+          key: trivy-seen-${{ steps.key.outputs.slug }}-${{ github.run_id }}
+          restore-keys: trivy-seen-${{ steps.key.outputs.slug }}-
+
+      - name: Report
+        env:
+          IMAGE: ${{ inputs.image }}
+          EVENT: ${{ github.event_name }}
+          WEBHOOK: ${{ secrets.SECURITY_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -r '[.Results[]? | .Vulnerabilities[]? | [.Severity, .VulnerabilityID, .PkgName, .InstalledVersion, .FixedVersion] | join(" ")] | unique | .[]' \
+            trivy.json > now.txt
+          touch .trivy-seen
+          comm -23 <(sort -u now.txt) <(sort -u .trivy-seen) > new.txt
+          total=$(wc -l < now.txt | tr -d ' '); fresh=$(wc -l < new.txt | tr -d ' ')
+          {
+            echo "### Trivy: \`$IMAGE\`"
+            echo "$total HIGH/CRITICAL mit Fix, davon $fresh neu seit dem letzten Lauf."
+            if [ "$total" -gt 0 ]; then
+              echo; echo "| Schwere | ID | Paket | installiert | Fix |"; echo "|---|---|---|---|---|"
+              sed -E 's/^([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+) (.*)$/| \1 | \2 | \3 | \4 | \5 |/' now.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$fresh" -gt 0 ] && [ -n "$WEBHOOK" ]; then
+            lines=$(head -8 new.txt | sed -E 's/^([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+) (.*)$/• \1 `\2` \3 \4 → \5/')
+            more=""; [ "$fresh" -gt 8 ] && more=$'\n'"_$fresh neue insgesamt_"
+            jq -n --arg t "🟠 Trivy (CI) · $GITHUB_REPOSITORY · $fresh neu" --arg b "\`$IMAGE\`"$'\n'"$lines$more"$'\n'"<$RUN_URL|Lauf>" \
+              '{text: $t, blocks: [{type: "section", text: {type: "mrkdwn", text: ("*" + $t + "*\n" + $b)}}]}' \
+              | curl -sf -X POST -H 'Content-Type: application/json' --data @- "$WEBHOOK" >/dev/null \
+              || echo "::warning::Slack-Meldung fehlgeschlagen"
+          fi
+          cp now.txt .trivy-seen
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          if [ "$total" -gt 0 ] && [ "$EVENT" = schedule ]; then
+            echo "::error::$total HIGH/CRITICAL mit Fix in $IMAGE"; exit 1
+          fi
+        id: report
+
+      - name: Remember findings
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-seen
+          key: trivy-seen-${{ steps.key.outputs.slug }}-${{ github.run_id }}
+
+      - name: SARIF
+        if: inputs.sarif
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ inputs.image }}
+          format: sarif
+          output: trivy.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          skip-setup-trivy: true
+
+      - name: Upload SARIF
+        if: inputs.sarif
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-image
