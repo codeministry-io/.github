@@ -1,0 +1,22 @@
+# Slack app for the deploy screenshots (cm-k8s-cluster spec 017). Create it once:
+# api.slack.com/apps → Create New App → From an app manifest → this file. Install it to the workspace, run
+# `/invite @Deploy-Screenshots` in #notifications and copy the Bot User OAuth Token (xoxb-…) into the repo secret
+# SLACK_SCREENSHOTS_TOKEN of every caller. Two scopes and nothing else: the bot can upload files and post, it can
+# read nothing. Deleting the app revokes the token.
+display_information:
+  name: Deploy-Screenshots
+  description: Screenshots of every app after its deploy, desktop and mobile
+  background_color: "#1f2328"
+features:
+  bot_user:
+    display_name: Deploy-Screenshots
+    always_online: false
+oauth_config:
+  scopes:
+    bot:
+      - files:write
+      - chat:write
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

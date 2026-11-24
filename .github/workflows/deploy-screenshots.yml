@@ -1,0 +1,90 @@
+# Reusable deploy screenshots (cm-k8s-cluster spec 017).
+#
+# Called by the app repos after their image build on main (their own screenshots.yml, never trivy.yml, so a single
+# `gh workflow disable screenshots.yml` stops it without touching the CVE scan). Waits until the start page of every
+# page names new bundles (the image updater and ArgoCD roll the new version out a few minutes after the build), then
+# records each page at 1440 and at 390 with touch emulation in Chromium on this runner and uploads all images as ONE
+# message to Slack #notifications through the bot of the Slack app in slack/deploy-screenshots-app.yaml. No
+# screenshot service, no public image URL. A failed run is a red job and nothing else: no other job needs it.
+#
+# Lives in this public repo because a reusable workflow in a private repo cannot be called from a public one.
+name: Deploy screenshots
+
+on:
+  workflow_call:
+    inputs:
+      pages:
+        description: Pages to record, one URL per line (the entry URLs of the repo in cm-k8s-cluster tests/e2e/apps.ts)
+        required: true
+        type: string
+      consent-button:
+        description: Visible text of the button that closes the cookie dialog ("Nur notwendige"); empty for none
+        required: false
+        type: string
+        default: ''
+      wait-minutes:
+        description: Upper limit for the wait on new bundle names; a manual run passes 1
+        required: false
+        type: number
+        default: 15
+      channel:
+        description: Slack channel ID (not the name) to post to; defaults to #notifications
+        required: false
+        type: string
+        default: C0000000000
+    secrets:
+      SLACK_BOT_TOKEN:
+        description: Bot token of the Deploy-Screenshots Slack app (files:write, chat:write)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    name: Deploy screenshots
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the screenshot script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: codeministry/.github
+          ref: main
+          sparse-checkout: scripts/deploy-screenshots
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.5
+
+      - name: Install
+        working-directory: scripts/deploy-screenshots
+        run: |
+          bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium
+
+      - name: Wait for the deploy, record, post
+        working-directory: scripts/deploy-screenshots
+        env:
+          PAGES: ${{ inputs.pages }}
+          CONSENT_BUTTON: ${{ inputs.consent-button }}
+          WAIT_MINUTES: ${{ inputs.wait-minutes }}
+          CHANNEL: ${{ inputs.channel }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          BUILD_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          OUT_DIR: screenshots
+        run: bun screenshots.ts
+
+      - name: Keep the images
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deploy-screenshots
+          path: scripts/deploy-screenshots/screenshots/*.png
+          retention-days: 7
+          if-no-files-found: ignore
