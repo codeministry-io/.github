@@ -22,8 +22,13 @@ on:
         required: false
         type: string
         default: ''
+      viewports:
+        description: both (1440 and 390 with touch) or desktop (1440 only, for tools behind a login)
+        required: false
+        type: string
+        default: both
       wait-minutes:
-        description: Upper limit for the wait on new bundle names; a manual run passes 1
+        description: Upper limit for the wait on the new build; 0 records the pages as they are, without a warning
         required: false
         type: number
         default: 15
@@ -72,6 +77,7 @@ jobs:
           PAGES: ${{ inputs.pages }}
           CONSENT_BUTTON: ${{ inputs.consent-button }}
           WAIT_MINUTES: ${{ inputs.wait-minutes }}
+          VIEWPORTS: ${{ inputs.viewports }}
           CHANNEL: ${{ inputs.channel }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           REPO: ${{ github.repository }}

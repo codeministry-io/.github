@@ -14,17 +14,20 @@
 // Without a token (or with --dry-run) the images are recorded and kept, and nothing is posted.
 //
 // Env: PAGES (one URL per line), CONSENT_BUTTON, WAIT_MINUTES, POLL_SECONDS, CHANNEL, SLACK_BOT_TOKEN, REPO, SHA,
-//      COMMIT_SUBJECT, GITHUB_TOKEN (only to look the subject up when COMMIT_SUBJECT is empty), BUILD_URL, OUT_DIR.
+//      COMMIT_SUBJECT, GITHUB_TOKEN (only to look the subject up when COMMIT_SUBJECT is empty), BUILD_URL, OUT_DIR,
+//      VIEWPORTS (`both`, the default, or `desktop`). WAIT_MINUTES=0 records the pages as they are, without a warning.
 
 import { chromium, type Browser } from "playwright";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 const UMAMI = /^https:\/\/umami\.codeministry\.io\//;
-const VIEWPORTS = [
+const ALL_VIEWPORTS = [
   { width: 1440, height: 900, mobile: false, scale: 1 },
   { width: 390, height: 844, mobile: true, scale: 2 },
 ] as const;
+// Tools behind a login are desktop apps; one image each keeps a message about many of them readable.
+const VIEWPORTS = (process.env.VIEWPORTS ?? "").trim() === "desktop" ? ALL_VIEWPORTS.slice(0, 1) : ALL_VIEWPORTS;
 // One completeUploadExternal call becomes one message; keep it small enough to stay one readable message.
 const MAX_FILES = 10;
 // A long landing page at full height is a thumbnail nobody can read in Slack (checkmeinebu mobile: 13788 px).
@@ -62,6 +65,8 @@ interface PageState {
   live: string | null;
   appVersion: string | null;
   liveAfterSeconds: number | null;
+  // the host the browser ended on when the page redirects (a tool sending a visitor to its login at Keycloak)
+  landed?: string;
   error?: string;
 }
 
@@ -218,8 +223,9 @@ async function record(browser: Browser, states: PageState[]): Promise<Shot[]> {
         // Sites that fade sections in on scroll show them right away under reduced motion.
         reducedMotion: "reduce",
       });
-      // A deploy is not a visit: the analytics tracker never loads.
-      await context.route(UMAMI, (route) => route.abort());
+      // A deploy is not a visit: the analytics tracker never loads. Umami's own login page is the one exception.
+      await context.route(UMAMI, (route) =>
+        new URL(route.request().url()).host === s.host ? route.continue() : route.abort());
       const page = await context.newPage();
       try {
         await page.goto(s.url, { waitUntil: "networkidle", timeout: 45_000 }).catch(async () => {
@@ -237,16 +243,27 @@ async function record(browser: Browser, states: PageState[]): Promise<Shot[]> {
             log(`${s.host} ${vp.width}: no consent dialog within 8 s, recording anyway`);
           }
         }
-        // Walk down once so scroll-triggered sections and lazy images load, then back to the top.
+        // Walk down once so scroll-triggered sections and lazy images load, then back to the top. A page that
+        // navigates on its own meanwhile (Umami's /login after its session check) destroys the context: wait for the
+        // new page to load and walk it once more.
         const maxHeight = vp.height * MAX_SCREENS;
-        await page.evaluate(async ({ step, limit }) => {
-          for (let y = 0; y < Math.min(document.documentElement.scrollHeight, limit); y += step) {
-            window.scrollTo(0, y);
-            await new Promise((r) => setTimeout(r, 200));
-          }
-          window.scrollTo(0, 0);
-        }, { step: Math.round(vp.height * 0.8), limit: maxHeight });
+        const walk = () =>
+          page.evaluate(async ({ step, limit }) => {
+            for (let y = 0; y < Math.min(document.documentElement.scrollHeight, limit); y += step) {
+              window.scrollTo(0, y);
+              await new Promise((r) => setTimeout(r, 200));
+            }
+            window.scrollTo(0, 0);
+          }, { step: Math.round(vp.height * 0.8), limit: maxHeight });
+        try {
+          await walk();
+        } catch {
+          await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+          await walk();
+        }
         await page.waitForTimeout(1000);
+        const landed = new URL(page.url()).host;
+        if (landed !== s.host) s.landed = landed;
         const fullHeight = await page.evaluate(() => document.documentElement.scrollHeight);
         const name = `${s.host}-${vp.width}-${sha7}.png`;
         const file = join(outDir, name);
@@ -317,12 +334,16 @@ function message(states: PageState[], subject: string): string {
   const title = subject ? ` ${escape(subject.length > 100 ? `${subject.slice(0, 99)}…` : subject)}` : "";
   const head = `:camera: ${repo} · \`${sha7}\`${title}${buildUrl ? ` · <${buildUrl}|Build>` : ""}`;
   const lines = states.map((s) => {
-    if (s.error) return `:x: ${s.host}: ${s.error}`;
+    const host = s.landed ? `${s.host} (→ ${s.landed})` : s.host;
+    if (s.error) return `:x: ${host}: ${s.error}`;
+    if (s.liveAfterSeconds === null && waitMinutes === 0) {
+      return `${host}: Stand beim Start${s.mode === "version" ? ` ${live(s)}` : ""} (ohne Warten)`;
+    }
     if (s.liveAfterSeconds !== null) {
       const what = s.mode === "version" ? `live ${live(s)}` : "live";
-      return `${s.host}: ${what} ${s.liveAfterSeconds === 0 ? "(schon beim Start)" : `nach ${s.liveAfterSeconds} s`}`;
+      return `${host}: ${what} ${s.liveAfterSeconds === 0 ? "(schon beim Start)" : `nach ${s.liveAfterSeconds} s`}`;
     }
-    return `:warning: ${s.host}: ${notLive(s)}`;
+    return `:warning: ${host}: ${notLive(s)}`;
   });
   return [head, ...lines].join("\n");
 }
@@ -379,8 +400,8 @@ async function main(): Promise<number> {
       posted,
       slackError,
       files: shots.map((s) => s.name),
-      pages: states.map(({ host, mode, before, after, live, appVersion, liveAfterSeconds, error }) => ({
-        host, mode, before, after, live, appVersion, liveAfterSeconds, error,
+      pages: states.map(({ host, mode, before, after, live, appVersion, liveAfterSeconds, landed, error }) => ({
+        host, mode, before, after, live, appVersion, liveAfterSeconds, landed, error,
       })),
     })}`,
   );
@@ -390,7 +411,7 @@ async function main(): Promise<number> {
     await Bun.write(summary, `### Deploy-Screenshots ${repo} \`${sha7}\`\n\n${text.split("\n").map((l) => `- ${l}`).join("\n")}\n`);
   }
   for (const s of states) {
-    if (!s.error && s.liveAfterSeconds === null) console.log(`::warning::${s.host}: ${notLive(s)}`);
+    if (!s.error && s.liveAfterSeconds === null && waitMinutes > 0) console.log(`::warning::${s.host}: ${notLive(s)}`);
   }
   return states.some((s) => s.error) || slackError ? 1 : 0;
 }

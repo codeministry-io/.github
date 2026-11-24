@@ -37,6 +37,10 @@ the commit that triggered the build, and the message shows the version that is l
 the start page's bundle names and counts as live once they change; a build that renames nothing (only `.github/`
 changed, say) then waits the full time and reports "Deploy nicht erkannt".
 
+`viewports: desktop` records 1440 only (tools behind a login, cm-k8s-cluster's `tool-screenshots.yml`), and
+`wait-minutes: 0` records the pages as they are, without waiting and without a warning (a manual run). A page that
+redirects (Outline and straightmail to their Keycloak login) names the host it ended on in the message.
+
 ```dockerfile
 # last stage, after the site is copied in
 ARG APP_VERSION=0.0.0
