@@ -1,0 +1,16 @@
+{
+  "name": "deploy-screenshots",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Screenshots of a freshly deployed app, posted to Slack (cm-k8s-cluster spec 017)",
+  "scripts": {
+    "shoot": "bun screenshots.ts"
+  },
+  "dependencies": {
+    "playwright": "1.65.1"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.5"
+  }
+}

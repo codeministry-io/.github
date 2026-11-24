@@ -1,0 +1,4 @@
+[install]
+# Supply-chain protection, as in cm-k8s-cluster tests/e2e: only install versions at least 12 hours old.
+# 12 * 60 * 60 = 43200 seconds.
+minimumReleaseAge = 43200
