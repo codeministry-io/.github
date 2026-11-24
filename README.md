@@ -58,7 +58,7 @@ jobs:
       pages: |
         https://www.example.de/
       consent-button: Nur notwendige
-      wait-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.wait-minutes || 15 }}
+      wait-minutes: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.wait-minutes || '15') }}
     secrets:
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_SCREENSHOTS_TOKEN }}
 ```
