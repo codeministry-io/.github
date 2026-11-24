@@ -76,6 +76,9 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # First line of the commit message for the head line; a manual run has none and looks it up with the token.
+          COMMIT_SUBJECT: ${{ github.event.workflow_run.head_commit.message }}
+          GITHUB_TOKEN: ${{ github.token }}
           BUILD_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
           OUT_DIR: screenshots
         run: bun screenshots.ts
