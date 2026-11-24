@@ -26,7 +26,7 @@ Public on purpose: a reusable workflow in a private repository cannot be called 
 
 ## `deploy-screenshots.yml`
 
-Screenshots of a freshly deployed app in Slack #notifications, desktop (1440) and mobile (390, touch), one message per
+Screenshots of a freshly deployed app in Slack #tests, desktop (1440) and mobile (390, touch), one message per
 build with repo, commit and build link. Runs after the image build on main, waits until the start page names new
 bundles (at most `wait-minutes`), records with Playwright and Chromium on the runner and uploads through a Slack bot.
 No screenshot service; the images also stay seven days as a run artifact. Never a required check.
@@ -64,7 +64,7 @@ jobs:
 ```
 
 **Slack app, once:** api.slack.com/apps → *Create New App* → *From an app manifest* →
-`slack/deploy-screenshots-app.yaml`; install it, `/invite @Deploy-Screenshots` in #notifications, then per caller repo
+`slack/deploy-screenshots-app.yaml`; install it, `/invite @Deploy-Screenshots` in #tests, then per caller repo
 `gh secret set SLACK_SCREENSHOTS_TOKEN -R codeministry/<repo>` with the Bot User OAuth Token. Scopes are `files:write`
 and `chat:write` only.
 
