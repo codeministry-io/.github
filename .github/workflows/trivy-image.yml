@@ -21,6 +21,12 @@ on:
         required: false
         type: boolean
         default: false
+      platform:
+        description: Platform to scan from an index, os/arch. Defaults to the arm64 of the cluster; a multi-arch image
+          that runs elsewhere too can have its other platform scanned in a second call.
+        required: false
+        type: string
+        default: linux/arm64
     secrets:
       SECURITY_WEBHOOK:
         description: Slack incoming webhook for #security
@@ -31,8 +37,9 @@ permissions:
 
 jobs:
   scan:
-    name: Trivy ${{ inputs.image }}
+    name: Trivy ${{ inputs.image }} (${{ inputs.platform }})
     # The images are arm64-only (CLAUDE.md of cm-k8s-cluster): scan the artefact that runs, on its own platform.
+    # Another platform is read from the registry like any other image; the runner does not have to match it.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     permissions:
@@ -52,7 +59,7 @@ jobs:
         env:
           # Trivy picks linux/amd64 from an index regardless of the runner, and the own images are arm64-only:
           # "no child with platform linux/amd64 in index" (first runs, 2026-11-23).
-          TRIVY_PLATFORM: linux/arm64
+          TRIVY_PLATFORM: ${{ inputs.platform }}
         with:
           image-ref: ${{ inputs.image }}
           format: json
@@ -65,7 +72,11 @@ jobs:
         id: key
         env:
           IMAGE: ${{ inputs.image }}
-        run: echo "slug=$(printf '%s' "$IMAGE" | tr -c 'a-zA-Z0-9' '-')" >> "$GITHUB_OUTPUT"
+          PLATFORM: ${{ inputs.platform }}
+        # The default platform keeps the key of the runs before the input existed, so their findings stay known.
+        run: |
+          key=$IMAGE; [ "$PLATFORM" = linux/arm64 ] || key="$IMAGE $PLATFORM"
+          echo "slug=$(printf '%s' "$key" | tr -c 'a-zA-Z0-9' '-')" >> "$GITHUB_OUTPUT"
 
       - name: Findings of the previous run
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -76,7 +87,7 @@ jobs:
 
       - name: Report
         env:
-          IMAGE: ${{ inputs.image }}
+          IMAGE: ${{ inputs.image }} (${{ inputs.platform }})
           EVENT: ${{ github.event_name }}
           WEBHOOK: ${{ secrets.SECURITY_WEBHOOK }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -120,7 +131,7 @@ jobs:
         if: inputs.sarif
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
-          TRIVY_PLATFORM: linux/arm64
+          TRIVY_PLATFORM: ${{ inputs.platform }}
         with:
           image-ref: ${{ inputs.image }}
           format: sarif
@@ -134,4 +145,5 @@ jobs:
         uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           sarif_file: trivy.sarif
-          category: trivy-image
+          # The arm64 scans keep the category they had before the input existed, so their alerts carry on.
+          category: ${{ inputs.platform == 'linux/arm64' && 'trivy-image' || format('trivy-image-{0}', inputs.platform) }}
