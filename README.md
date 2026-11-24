@@ -27,9 +27,24 @@ Public on purpose: a reusable workflow in a private repository cannot be called 
 ## `deploy-screenshots.yml`
 
 Screenshots of a freshly deployed app in Slack #tests, desktop (1440) and mobile (390, touch), one message per
-build with repo, commit and build link. Runs after the image build on main, waits until the start page names new
-bundles (at most `wait-minutes`), records with Playwright and Chromium on the runner and uploads through a Slack bot.
+build with repo, commit, commit subject and build link. Runs after the image build on main, waits until the new build
+is live (at most `wait-minutes`), records with Playwright and Chromium on the runner and uploads through a Slack bot.
 No screenshot service; the images also stay seven days as a run artifact. Never a required check.
+
+"Live" comes from `/version.txt` when the site serves one: `text/plain` with `<package version>+<commit>` (or the bare
+commit), written by the app's Dockerfile from the build args `APP_VERSION` and `GIT_SHA`. The run waits until it names
+the commit that triggered the build, and the message shows the version that is live. A site without it falls back to
+the start page's bundle names and counts as live once they change; a build that renames nothing (only `.github/`
+changed, say) then waits the full time and reports "Deploy nicht erkannt".
+
+```dockerfile
+# last stage, after the site is copied in
+ARG APP_VERSION=0.0.0
+ARG GIT_SHA=unknown
+USER root
+RUN printf '%s+%s\n' "$APP_VERSION" "$GIT_SHA" > /usr/share/nginx/html/version.txt
+USER 101
+```
 
 ```yaml
 # .github/workflows/screenshots.yml in an app repo
