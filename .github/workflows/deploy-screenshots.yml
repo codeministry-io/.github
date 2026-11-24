@@ -31,7 +31,7 @@ on:
         description: Slack channel ID (not the name) to post to; defaults to #notifications
         required: false
         type: string
-        default: C0000000000
+        default: CURJDHCMC # #notifications
     secrets:
       SLACK_BOT_TOKEN:
         description: Bot token of the Deploy-Screenshots Slack app (files:write, chat:write)
