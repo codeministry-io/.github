@@ -4,7 +4,7 @@
 # `gh workflow disable screenshots.yml` stops it without touching the CVE scan). Waits until the start page of every
 # page names new bundles (the image updater and ArgoCD roll the new version out a few minutes after the build), then
 # records each page at 1440 and at 390 with touch emulation in Chromium on this runner and uploads all images as ONE
-# message to Slack #notifications through the bot of the Slack app in slack/deploy-screenshots-app.yaml. No
+# message to Slack #tests through the bot of the Slack app in slack/deploy-screenshots-app.yaml. No
 # screenshot service, no public image URL. A failed run is a red job and nothing else: no other job needs it.
 #
 # Lives in this public repo because a reusable workflow in a private repo cannot be called from a public one.
@@ -28,10 +28,10 @@ on:
         type: number
         default: 15
       channel:
-        description: Slack channel ID (not the name) to post to; defaults to #notifications
+        description: Slack channel ID (not the name) to post to; defaults to #tests
         required: false
         type: string
-        default: CURJDHCMC # #notifications
+        default: C0CMHER3PL0 # #tests
     secrets:
       SLACK_BOT_TOKEN:
         description: Bot token of the Deploy-Screenshots Slack app (files:write, chat:write)
