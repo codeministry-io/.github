@@ -13,11 +13,12 @@ no ticket system, no call center.
 | [**.github**](https://github.com/codeministry-io/.github) | Reusable GitHub Actions workflows: Trivy image scan and deploy screenshots to Slack. | in use |
 
 We also maintain forks we run in production and send fixes upstream:
-[erpnext_germanized](https://github.com/codeministry-io/erpnext_germanized) (ERPNext for German companies, by
-[encircle360-oss](https://github.com/encircle360-oss)),
-[straightmail](https://github.com/codeministry-io/straightmail) (mail microservice with templating) and
-[renovate-operator](https://github.com/codeministry-io/renovate-operator) (Renovate in Kubernetes, by
-[mogenius](https://github.com/mogenius)).
+
+| | Fork | What it is | Upstream |
+|---|---|---|---|
+| <img src="https://raw.githubusercontent.com/codeministry-io/.github/main/profile/assets/erpnext.svg" width="36" alt="ERPNext"> | [**erpnext_germanized**](https://github.com/codeministry-io/erpnext_germanized) | ERPNext for German companies as a ready-made container image: DATEV export, e-invoicing, ELSTER. | [encircle360-oss](https://github.com/encircle360-oss/erpnext_germanized) |
+| <img src="https://raw.githubusercontent.com/codeministry-io/.github/main/profile/assets/straightmail.svg" width="36" alt="straightmail"> | [**straightmail**](https://github.com/codeministry-io/straightmail) | Microservice and REST API for sending emails with i18n and templating. | [encircle360-oss](https://github.com/encircle360-oss/straightmail) |
+| <img src="https://raw.githubusercontent.com/codeministry-io/.github/main/profile/assets/renovate.png" width="36" alt="Renovate"> | [**renovate-operator**](https://github.com/codeministry-io/renovate-operator) | Renovate in Kubernetes, with a job overview and a security view in the UI. | [mogenius](https://github.com/mogenius/renovate-operator) |
 
 ## How we work
 
