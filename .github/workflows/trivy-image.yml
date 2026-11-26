@@ -13,11 +13,11 @@ on:
   workflow_call:
     inputs:
       image:
-        description: Image reference to scan, e.g. ghcr.io/codeministry/checkmeinebu:latest
+        description: Image reference to scan, e.g. ghcr.io/codeministry-io/checkmeinebu:latest
         required: true
         type: string
       sarif:
-        description: Also upload SARIF to code scanning (public repos only; private ones of a personal account have no code scanning)
+        description: Also upload SARIF to code scanning (public repos only; private ones have no code scanning without GitHub Code Security)
         required: false
         type: boolean
         default: false

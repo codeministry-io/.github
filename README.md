@@ -1,4 +1,4 @@
-# codeministry/.github
+# codeministry-io/.github
 
 Shared GitHub Actions workflows for the codeministry repositories.
 
@@ -15,9 +15,9 @@ jobs:
       contents: read
       packages: read
       security-events: write
-    uses: codeministry/.github/.github/workflows/trivy-image.yml@main
+    uses: codeministry-io/.github/.github/workflows/trivy-image.yml@main
     with:
-      image: ghcr.io/codeministry/<image>:latest
+      image: ghcr.io/codeministry-io/<image>:latest
     secrets:
       SECURITY_WEBHOOK: ${{ secrets.SECURITY_WEBHOOK }}
 ```
@@ -72,7 +72,7 @@ permissions:
 jobs:
   screenshots:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request')
-    uses: codeministry/.github/.github/workflows/deploy-screenshots.yml@main
+    uses: codeministry-io/.github/.github/workflows/deploy-screenshots.yml@main
     with:
       pages: |
         https://www.example.de/
@@ -84,13 +84,13 @@ jobs:
 
 **Slack app, once:** api.slack.com/apps → *Create New App* → *From an app manifest* →
 `slack/deploy-screenshots-app.yaml`; install it, `/invite @Deploy-Screenshots` in #tests, then per caller repo
-`gh secret set SLACK_SCREENSHOTS_TOKEN -R codeministry/<repo>` with the Bot User OAuth Token. Scopes are `files:write`
+`gh secret set SLACK_SCREENSHOTS_TOKEN -R codeministry-io/<repo>` with the Bot User OAuth Token. Scopes are `files:write`
 and `chat:write` only.
 
 **Rotating the token:** *OAuth & Permissions* → *Revoke tokens*, reinstall the app, set the new token in every caller
 repo. Callers without a valid token fail with `invalid_auth` in the log until then; nothing else is affected.
 
-**Rollback.** Stage 1, about a minute: `gh workflow disable screenshots.yml -R codeministry/<repo>` in every caller.
+**Rollback.** Stage 1, about a minute: `gh workflow disable screenshots.yml -R codeministry-io/<repo>` in every caller.
 Stage 2, about ten minutes: remove `screenshots.yml` and the secret in every caller, remove this workflow, the script
 under `scripts/deploy-screenshots/` and the manifest here, and delete the Slack app (which revokes the token). The run
 keeps no state; posted messages stay in the channel.
